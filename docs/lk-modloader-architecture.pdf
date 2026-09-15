@@ -1,0 +1,1251 @@
+%PDF-1.4
+1 0 obj
+<< /Length 567 >>
+stream
+BT
+/F1 10 Tf 54.00 715.00 Td (Repository: <https://github.com/somraj80/lk-modloader>) Tj
+-54.00 -715.00 Td
+/F1 10 Tf 54.00 698.00 Td (Looking for the narrative version? STAGES.md walks through) Tj
+-54.00 -698.00 Td
+/F1 10 Tf 54.00 687.00 Td (M1?M6 in build order with the rationale for each, the ET_EXEC ? ET_REL) Tj
+-54.00 -687.00 Td
+/F1 10 Tf 54.00 676.00 Td (pivot, and a worked example of how one relocation is actually applied. This) Tj
+-54.00 -676.00 Td
+/F1 10 Tf 54.00 665.00 Td (document is the reference; that one is the guided tour.) Tj
+-54.00 -665.00 Td
+ET
+endstream
+endobj
+2 0 obj
+<< /Type /Page /Parent 84 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 83 0 R >> >> /Contents 1 0 R >>
+endobj
+3 0 obj
+<< /Length 2397 >>
+stream
+BT
+/F1 13 Tf 54.00 723.00 Td (1. Executive Summary) Tj
+-54.00 -723.00 Td
+/F1 10 Tf 54.00 702.00 Td (lk-modloader is a proof-of-concept dynamic module loader for Little Kernel \(LK\) on the) Tj
+-54.00 -702.00 Td
+/F1 10 Tf 54.00 691.00 Td (QEMU ARM32 virt platform. It demonstrates how a small embedded kernel can load) Tj
+-54.00 -691.00 Td
+/F1 10 Tf 54.00 680.00 Td (freestanding ARM32 payloads at runtime ? ET_REL .o objects, or a fixed ET_EXEC blob ?) Tj
+-54.00 -680.00 Td
+/F1 10 Tf 54.00 669.00 Td (relocate them, resolve symbols in both directions, enforce W^X memory protection, and) Tj
+-54.00 -669.00 Td
+/F1 10 Tf 54.00 658.00 Td (fetch modules from a host filesystem via virtio 9p.) Tj
+-54.00 -658.00 Td
+/F1 10 Tf 54.00 641.00 Td (The loader targets ET_REL exclusively \(plus the ET_EXEC blob path M1 used to prove the) Tj
+-54.00 -641.00 Td
+/F1 10 Tf 54.00 630.00 Td (basic load mechanism\). This mirrors how Linux kernel modules \(.ko\) are loaded: relocate a) Tj
+-54.00 -630.00 Td
+/F1 10 Tf 54.00 619.00 Td (compiler-emitted object directly into kernel memory the loader already controls. The) Tj
+-54.00 -619.00 Td
+/F1 10 Tf 54.00 608.00 Td (loader itself acts as a small, purpose-built linker ? laying out sections, resolving) Tj
+-54.00 -608.00 Td
+/F1 10 Tf 54.00 597.00 Td (symbols, and applying relocations ? sized for a single bare-metal kernel loading a bounded) Tj
+-54.00 -597.00 Td
+/F1 10 Tf 54.00 586.00 Td (set of modules into an address space it already owns. See §8.1 for the full rationale.) Tj
+-54.00 -586.00 Td
+/F1 10 Tf 54.00 569.00 Td (The project is intentionally delivered as a thin overlay on upstream LK: the repository) Tj
+-54.00 -569.00 Td
+/F1 10 Tf 54.00 558.00 Td (stores only modloader-specific sources \(~15 tracked files\). ./setup.sh clones a pinned LK) Tj
+-54.00 -558.00 Td
+/F1 10 Tf 54.00 547.00 Td (commit, downloads the Arm Toolchain for Embedded \(ATfE\), and applies the overlay into) Tj
+-54.00 -547.00 Td
+/F1 10 Tf 54.00 536.00 Td (build/lk/.) Tj
+-54.00 -536.00 Td
+/F1 10 Tf 54.00 519.00 Td (Development proceeds in six milestones \(M1?M6\), each adding one capability while keeping) Tj
+-54.00 -519.00 Td
+/F1 10 Tf 54.00 508.00 Td (prior behaviour testable. Every milestone has an autorun shell test with a distinct return) Tj
+-54.00 -508.00 Td
+/F1 10 Tf 54.00 497.00 Td (code, making regression detection trivial in QEMU and CI.) Tj
+-54.00 -497.00 Td
+ET
+endstream
+endobj
+4 0 obj
+<< /Type /Page /Parent 84 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 83 0 R >> >> /Contents 3 0 R >>
+endobj
+5 0 obj
+<< /Length 83 >>
+stream
+BT
+/F1 13 Tf 54.00 723.00 Td (2. Problem Statement & Goals) Tj
+-54.00 -723.00 Td
+ET
+endstream
+endobj
+6 0 obj
+<< /Type /Page /Parent 84 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 83 0 R >> >> /Contents 5 0 R >>
+endobj
+7 0 obj
+<< /Length 566 >>
+stream
+BT
+/F1 13 Tf 54.00 723.00 Td (2.1 Problem) Tj
+-54.00 -723.00 Td
+/F1 10 Tf 54.00 702.00 Td (LK is a modular kernel, but modules are traditionally linked statically at build time. For) Tj
+-54.00 -702.00 Td
+/F1 10 Tf 54.00 691.00 Td (experimentation, firmware plugins, or rapid iteration, we want runtime loading ? analogous) Tj
+-54.00 -691.00 Td
+/F1 10 Tf 54.00 680.00 Td (to how Linux loads a kernel module \(insmod\) ? without needing to rebuild and reflash the) Tj
+-54.00 -680.00 Td
+/F1 10 Tf 54.00 669.00 Td (kernel image for every change.) Tj
+-54.00 -669.00 Td
+ET
+endstream
+endobj
+8 0 obj
+<< /Type /Page /Parent 84 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 83 0 R >> >> /Contents 7 0 R >>
+endobj
+9 0 obj
+<< /Length 1461 >>
+stream
+BT
+/F1 13 Tf 54.00 723.00 Td (2.2 Goals) Tj
+-54.00 -723.00 Td
+/F1 10 Tf 54.00 702.00 Td (| Goal | Rationale |) Tj
+-54.00 -702.00 Td
+/F1 10 Tf 54.00 691.00 Td (|------|-----------|) Tj
+-54.00 -691.00 Td
+/F1 10 Tf 54.00 680.00 Td (| Load freestanding ARM32 code into kernel virtual address space | Proves basic vmm_alloc) Tj
+-54.00 -680.00 Td
+/F1 10 Tf 54.00 669.00 Td (+ execute path |) Tj
+-54.00 -669.00 Td
+/F1 10 Tf 54.00 658.00 Td (| Support ET_REL objects with relocation | Real compiler output is relocatable, not pre-) Tj
+-54.00 -658.00 Td
+/F1 10 Tf 54.00 647.00 Td (linked |) Tj
+-54.00 -647.00 Td
+/F1 10 Tf 54.00 636.00 Td (| Resolve undefined symbols against kernel exports | Payloads need kernel services) Tj
+-54.00 -636.00 Td
+/F1 10 Tf 54.00 625.00 Td (\(malloc, printf, drivers\) |) Tj
+-54.00 -625.00 Td
+/F1 10 Tf 54.00 614.00 Td (| Allow kernel to call payload exports | Bidirectional linking enables callbacks and) Tj
+-54.00 -614.00 Td
+/F1 10 Tf 54.00 603.00 Td (plugin APIs |) Tj
+-54.00 -603.00 Td
+/F1 10 Tf 54.00 592.00 Td (| Enforce W^X | Security baseline: no RWX pages after load |) Tj
+-54.00 -592.00 Td
+/F1 10 Tf 54.00 581.00 Td (| Fetch modules at runtime via 9p | Developer workflow: edit payload on host, test in QEMU) Tj
+-54.00 -581.00 Td
+/F1 10 Tf 54.00 570.00 Td (without rebuild |) Tj
+-54.00 -570.00 Td
+/F1 10 Tf 54.00 559.00 Td (| Minimal overlay, reproducible builds | Pin LK + ATfE; CI runs full test suite |) Tj
+-54.00 -559.00 Td
+ET
+endstream
+endobj
+10 0 obj
+<< /Type /Page /Parent 84 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 83 0 R >> >> /Contents 9 0 R >>
+endobj
+11 0 obj
+<< /Length 747 >>
+stream
+BT
+/F1 13 Tf 54.00 723.00 Td (2.3 Non-Goals \(PoC scope\)) Tj
+-54.00 -723.00 Td
+/F1 10 Tf 54.00 702.00 Td (- No dynamic linking of shared libraries at runtime ? only one, bounded ET_REL object is) Tj
+-54.00 -702.00 Td
+/F1 10 Tf 54.00 691.00 Td (relocated and linked per load \(see §8.1\)) Tj
+-54.00 -691.00 Td
+/F1 10 Tf 54.00 680.00 Td (- No thread-safe concurrent loads; only one module resident at a time) Tj
+-54.00 -680.00 Td
+/F1 10 Tf 54.00 669.00 Td (- No code signing or versioning) Tj
+-54.00 -669.00 Td
+/F1 10 Tf 54.00 658.00 Td (- No unload-and-reload stress testing beyond basic vmm_free_region) Tj
+-54.00 -658.00 Td
+/F1 10 Tf 54.00 647.00 Td (- ET_EXEC path \(M1\) does not participate in symbol tables \(M3/M6\)) Tj
+-54.00 -647.00 Td
+ET
+endstream
+endobj
+12 0 obj
+<< /Type /Page /Parent 84 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 83 0 R >> >> /Contents 11 0 R >>
+endobj
+13 0 obj
+<< /Length 1399 >>
+stream
+BT
+/F1 13 Tf 54.00 723.00 Td (3. System Context) Tj
+-54.00 -723.00 Td
+/F1 10 Tf 54.00 696.00 Td (Host \(Linux / WSL\)) Tj
+-54.00 -696.00 Td
+/F1 10 Tf 54.00 685.00 Td (+--------------------------------------------------------------+) Tj
+-54.00 -685.00 Td
+/F1 10 Tf 54.00 674.00 Td (|  lk-modloader overlay                                        |) Tj
+-54.00 -674.00 Td
+/F1 10 Tf 54.00 663.00 Td (|    setup.sh -> build/lk \(pinned LK + overlay\)                |) Tj
+-54.00 -663.00 Td
+/F1 10 Tf 54.00 652.00 Td (|    ATfE     -> build/toolchain                               |) Tj
+-54.00 -652.00 Td
+/F1 10 Tf 54.00 641.00 Td (|         |                                                    |) Tj
+-54.00 -641.00 Td
+/F1 10 Tf 54.00 630.00 Td (|         | embed at build          9p virtio \(/v9p\)           |) Tj
+-54.00 -630.00 Td
+/F1 10 Tf 54.00 619.00 Td (|         v                              |                     |) Tj
+-54.00 -619.00 Td
+/F1 10 Tf 54.00 608.00 Td (|  payload/*.o ------------------------> |  QEMU virt ARM32   |) Tj
+-54.00 -608.00 Td
+/F1 10 Tf 54.00 597.00 Td (|  \(ATfE -r / ET_EXEC\)                   |    LK + modloader  |) Tj
+-54.00 -597.00 Td
+/F1 10 Tf 54.00 586.00 Td (|                                        |    shell: modtest  |) Tj
+-54.00 -586.00 Td
+/F1 10 Tf 54.00 575.00 Td (+--------------------------------------------------------------+) Tj
+-54.00 -575.00 Td
+ET
+endstream
+endobj
+14 0 obj
+<< /Type /Page /Parent 84 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 83 0 R >> >> /Contents 13 0 R >>
+endobj
+15 0 obj
+<< /Length 554 >>
+stream
+BT
+/F1 13 Tf 54.00 723.00 Td (3.1 Target Platform) Tj
+-54.00 -723.00 Td
+/F1 10 Tf 54.00 702.00 Td (- Machine: QEMU virt, Cortex-A15, 512 MB RAM) Tj
+-54.00 -702.00 Td
+/F1 10 Tf 54.00 691.00 Td (- LK project: modloader \(project/modloader.mk\)) Tj
+-54.00 -691.00 Td
+/F1 10 Tf 54.00 680.00 Td (- Modules enabled: app/shell, app/modloader, lib/fs \(+ virtio 9p, PCI, etc. from virt) Tj
+-54.00 -680.00 Td
+/F1 10 Tf 54.00 669.00 Td (target\)) Tj
+-54.00 -669.00 Td
+/F1 10 Tf 54.00 658.00 Td (- Kernel load VA: payloads map at 0x7f108000) Tj
+-54.00 -658.00 Td
+ET
+endstream
+endobj
+16 0 obj
+<< /Type /Page /Parent 84 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 83 0 R >> >> /Contents 15 0 R >>
+endobj
+17 0 obj
+<< /Length 634 >>
+stream
+BT
+/F1 13 Tf 54.00 723.00 Td (3.2 Why 0x7f108000?) Tj
+-54.00 -723.00 Td
+/F1 10 Tf 54.00 702.00 Td (On qemu-virt-arm32, KERNEL_BASE is 0x80000000. The platform direct-maps) Tj
+-54.00 -702.00 Td
+/F1 10 Tf 54.00 691.00 Td (0x80000000?0xc0000000 for initial RAM, so those addresses are not available via) Tj
+-54.00 -691.00 Td
+/F1 10 Tf 54.00 680.00 Td (vmm_alloc\(\). The chosen VA is:) Tj
+-54.00 -680.00 Td
+/F1 10 Tf 54.00 663.00 Td (1. Below the direct map, allocatable by the VM subsystem) Tj
+-54.00 -663.00 Td
+/F1 10 Tf 54.00 652.00 Td (2. Within Thumb BL / BLX range of kernel text near 0x80100000 \(~16 MB\)) Tj
+-54.00 -652.00 Td
+ET
+endstream
+endobj
+18 0 obj
+<< /Type /Page /Parent 84 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 83 0 R >> >> /Contents 17 0 R >>
+endobj
+19 0 obj
+<< /Length 1282 >>
+stream
+BT
+/F1 13 Tf 54.00 723.00 Td (4. Repository Architecture \(Overlay Model\)) Tj
+-54.00 -723.00 Td
+/F1 10 Tf 54.00 702.00 Td (| Path | Role |) Tj
+-54.00 -702.00 Td
+/F1 10 Tf 54.00 691.00 Td (|------|------|) Tj
+-54.00 -691.00 Td
+/F1 10 Tf 54.00 680.00 Td (| setup.sh | Clone LK, fetch ATfE, rsync overlay |) Tj
+-54.00 -680.00 Td
+/F1 10 Tf 54.00 669.00 Td (| LK_PIN / ATFE_VERSION | Pinned upstream LK and toolchain |) Tj
+-54.00 -669.00 Td
+/F1 10 Tf 54.00 658.00 Td (| project/modloader.mk | LK project definition |) Tj
+-54.00 -658.00 Td
+/F1 10 Tf 54.00 647.00 Td (| app/modloader/ | Loader sources and tests |) Tj
+-54.00 -647.00 Td
+/F1 10 Tf 54.00 636.00 Td (| .github/workflows/ | CI: setup, build, run_modtest_all.sh |) Tj
+-54.00 -636.00 Td
+/F1 10 Tf 54.00 625.00 Td (| build/toolchain/ | ATfE install \(gitignored\) |) Tj
+-54.00 -625.00 Td
+/F1 10 Tf 54.00 614.00 Td (| build/lk/ | Full LK tree \(gitignored\) |) Tj
+-54.00 -614.00 Td
+/F1 10 Tf 54.00 597.00 Td (Design rationale: Forking all of LK would bloat the repo and complicate rebases. The) Tj
+-54.00 -597.00 Td
+/F1 10 Tf 54.00 586.00 Td (overlay keeps the diff reviewable \(~15?20 files\) while setup.sh guarantees a reproducible) Tj
+-54.00 -586.00 Td
+/F1 10 Tf 54.00 575.00 Td (full tree for builds.) Tj
+-54.00 -575.00 Td
+ET
+endstream
+endobj
+20 0 obj
+<< /Type /Page /Parent 84 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 83 0 R >> >> /Contents 19 0 R >>
+endobj
+21 0 obj
+<< /Length 79 >>
+stream
+BT
+/F1 13 Tf 54.00 723.00 Td (5. Software Architecture) Tj
+-54.00 -723.00 Td
+ET
+endstream
+endobj
+22 0 obj
+<< /Type /Page /Parent 84 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 83 0 R >> >> /Contents 21 0 R >>
+endobj
+23 0 obj
+<< /Length 1628 >>
+stream
+BT
+/F1 13 Tf 54.00 723.00 Td (5.1 Module Decomposition) Tj
+-54.00 -723.00 Td
+/F1 10 Tf 54.00 702.00 Td (| File | Responsibility |) Tj
+-54.00 -702.00 Td
+/F1 10 Tf 54.00 691.00 Td (|------|----------------|) Tj
+-54.00 -691.00 Td
+/F1 10 Tf 54.00 680.00 Td (| modloader.c | Public API: load_image, load_uri, run, unload, wx_verify |) Tj
+-54.00 -680.00 Td
+/F1 10 Tf 54.00 669.00 Td (| modloader_reloc.c | ET_EXEC blob copy; ET_REL layout, ARM relocation, entry discovery |) Tj
+-54.00 -669.00 Td
+/F1 10 Tf 54.00 658.00 Td (| modloader_export.c | Kernel ? payload symbol table \(modloader_export_register\) |) Tj
+-54.00 -658.00 Td
+/F1 10 Tf 54.00 647.00 Td (| modloader_symbols.c | Payload ? kernel symbol table \(modloader_lookup_symbol\) |) Tj
+-54.00 -647.00 Td
+/F1 10 Tf 54.00 636.00 Td (| modloader_fetch.c | URI fetch: file:/path, /path via virtio 9p mount at /v9p |) Tj
+-54.00 -636.00 Td
+/F1 10 Tf 54.00 625.00 Td (| modloader_wx.c | Post-load page remap \(RX / RW / RO\) and verification |) Tj
+-54.00 -625.00 Td
+/F1 10 Tf 54.00 614.00 Td (| modloader_shell.c | modtest shell command for manual and autorun testing |) Tj
+-54.00 -614.00 Td
+/F1 10 Tf 54.00 603.00 Td (| modloader_priv.h | Shared types, constants, internal declarations |) Tj
+-54.00 -603.00 Td
+/F1 10 Tf 54.00 592.00 Td (| include/app/modloader.h | Stable public header |) Tj
+-54.00 -592.00 Td
+/F1 10 Tf 54.00 575.00 Td (Design rationale: Splitting the loader by concern \(reloc, exports, symbols, fetch, W^X,) Tj
+-54.00 -575.00 Td
+/F1 10 Tf 54.00 564.00 Td (shell\) keeps each unit testable and mirrors production dynamic-linker structure.) Tj
+-54.00 -564.00 Td
+ET
+endstream
+endobj
+24 0 obj
+<< /Type /Page /Parent 84 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 83 0 R >> >> /Contents 23 0 R >>
+endobj
+25 0 obj
+<< /Length 962 >>
+stream
+BT
+/F1 13 Tf 54.00 723.00 Td (5.2 Loaded Module State) Tj
+-54.00 -723.00 Td
+/F1 10 Tf 54.00 702.00 Td (c) Tj
+-54.00 -702.00 Td
+/F1 10 Tf 54.00 691.00 Td (struct modloader_module {) Tj
+-54.00 -691.00 Td
+/F1 10 Tf 54.00 680.00 Td (bool loaded;) Tj
+-54.00 -680.00 Td
+/F1 10 Tf 54.00 669.00 Td (bool wx;              // W^X applied) Tj
+-54.00 -669.00 Td
+/F1 10 Tf 54.00 658.00 Td (enum modloader_kind kind;  // EXEC or REL) Tj
+-54.00 -658.00 Td
+/F1 10 Tf 54.00 647.00 Td (vaddr_t base;) Tj
+-54.00 -647.00 Td
+/F1 10 Tf 54.00 636.00 Td (size_t size;) Tj
+-54.00 -636.00 Td
+/F1 10 Tf 54.00 625.00 Td (vaddr_t entry;        // payload_entry \(Thumb bit set\)) Tj
+-54.00 -625.00 Td
+/F1 10 Tf 54.00 614.00 Td (};) Tj
+-54.00 -614.00 Td
+/F1 10 Tf 54.00 591.00 Td (Only one module may be loaded at a time \(ERR_ALREADY_EXISTS on second load\). This) Tj
+-54.00 -591.00 Td
+/F1 10 Tf 54.00 580.00 Td (simplifies lifetime management and matches PoC scope.) Tj
+-54.00 -580.00 Td
+ET
+endstream
+endobj
+26 0 obj
+<< /Type /Page /Parent 84 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 83 0 R >> >> /Contents 25 0 R >>
+endobj
+27 0 obj
+<< /Length 1604 >>
+stream
+BT
+/F1 13 Tf 54.00 723.00 Td (5.3 Public API) Tj
+-54.00 -723.00 Td
+/F1 10 Tf 54.00 702.00 Td (c) Tj
+-54.00 -702.00 Td
+/F1 10 Tf 54.00 691.00 Td (status_t modloader_load_image\(modloader_image_t image, uint32_t flags\);) Tj
+-54.00 -691.00 Td
+/F1 10 Tf 54.00 680.00 Td (status_t modloader_load_uri\(const char *uri, uint32_t flags\);) Tj
+-54.00 -680.00 Td
+/F1 10 Tf 54.00 669.00 Td (int modloader_run\(void\);) Tj
+-54.00 -669.00 Td
+/F1 10 Tf 54.00 658.00 Td (status_t modloader_unload\(void\);) Tj
+-54.00 -658.00 Td
+/F1 10 Tf 54.00 647.00 Td (status_t modloader_wx_verify\(void\);) Tj
+-54.00 -647.00 Td
+/F1 10 Tf 54.00 636.00 Td (void *modloader_lookup_symbol\(const char *name\);      // M6: kernel ? payload) Tj
+-54.00 -636.00 Td
+/F1 10 Tf 54.00 625.00 Td (status_t modloader_export_register\(const char *name, void *addr\);  // payload ? kernel) Tj
+-54.00 -625.00 Td
+/F1 10 Tf 54.00 602.00 Td (URI schemes:) Tj
+-54.00 -602.00 Td
+/F1 10 Tf 54.00 585.00 Td (| URI | Meaning |) Tj
+-54.00 -585.00 Td
+/F1 10 Tf 54.00 574.00 Td (|-----|---------|) Tj
+-54.00 -574.00 Td
+/F1 10 Tf 54.00 563.00 Td (| embed:exec | Embedded ET_EXEC blob \(M1\) |) Tj
+-54.00 -563.00 Td
+/F1 10 Tf 54.00 552.00 Td (| embed:rel | Embedded ET_REL object \(M2\) |) Tj
+-54.00 -552.00 Td
+/F1 10 Tf 54.00 541.00 Td (| embed:sym | Embedded sym payload \(M3/M6\) |) Tj
+-54.00 -541.00 Td
+/F1 10 Tf 54.00 530.00 Td (| embed:import | Embedded C-import payload \(M3, R_ARM_THM_JUMP24\) |) Tj
+-54.00 -530.00 Td
+/F1 10 Tf 54.00 519.00 Td (| file:/v9p/foo.o or /v9p/foo.o | Runtime fetch of an ET_REL object via 9p \(M5\) |) Tj
+-54.00 -519.00 Td
+ET
+endstream
+endobj
+28 0 obj
+<< /Type /Page /Parent 84 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 83 0 R >> >> /Contents 27 0 R >>
+endobj
+29 0 obj
+<< /Length 520 >>
+stream
+BT
+/F1 13 Tf 54.00 723.00 Td (6. Load Pipeline \(ET_REL\)) Tj
+-54.00 -723.00 Td
+/F1 10 Tf 54.00 702.00 Td (The ET_REL path is the primary production path \(M2?M6\):) Tj
+-54.00 -702.00 Td
+/F1 10 Tf 54.00 679.00 Td ([Fetch/embed] -> [Parse ELF] -> [Layout sections] -> [Resolve UNDEF syms]) Tj
+-54.00 -679.00 Td
+/F1 10 Tf 54.00 668.00 Td (|) Tj
+-54.00 -668.00 Td
+/F1 10 Tf 54.00 657.00 Td (v) Tj
+-54.00 -657.00 Td
+/F1 10 Tf 54.00 646.00 Td ([Record exports M6] <- [Apply W^X] <- [Apply .rel/.rela]) Tj
+-54.00 -646.00 Td
+ET
+endstream
+endobj
+30 0 obj
+<< /Type /Page /Parent 84 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 83 0 R >> >> /Contents 29 0 R >>
+endobj
+31 0 obj
+<< /Length 462 >>
+stream
+BT
+/F1 13 Tf 54.00 723.00 Td (6.1 Section Layout) Tj
+-54.00 -723.00 Td
+/F1 10 Tf 54.00 702.00 Td (For each SHF_ALLOC section in section-index order:) Tj
+-54.00 -702.00 Td
+/F1 10 Tf 54.00 685.00 Td (1. Align cumulative offset per sh_addralign) Tj
+-54.00 -685.00 Td
+/F1 10 Tf 54.00 674.00 Td (2. Copy SHT_PROGBITS from file; zero SHT_NOBITS) Tj
+-54.00 -674.00 Td
+/F1 10 Tf 54.00 663.00 Td (3. Record sec_addr[i] = offset within the mapping) Tj
+-54.00 -663.00 Td
+ET
+endstream
+endobj
+32 0 obj
+<< /Type /Page /Parent 84 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 83 0 R >> >> /Contents 31 0 R >>
+endobj
+33 0 obj
+<< /Length 784 >>
+stream
+BT
+/F1 13 Tf 54.00 723.00 Td (6.2 Relocation) Tj
+-54.00 -723.00 Td
+/F1 10 Tf 54.00 702.00 Td (Supported ARM types include:) Tj
+-54.00 -702.00 Td
+/F1 10 Tf 54.00 685.00 Td (- R_ARM_ABS32, R_ARM_GLOB_DAT, R_ARM_JUMP_SLOT) Tj
+-54.00 -685.00 Td
+/F1 10 Tf 54.00 674.00 Td (- R_ARM_RELATIVE, R_ARM_REL32) Tj
+-54.00 -674.00 Td
+/F1 10 Tf 54.00 663.00 Td (- R_ARM_CALL, R_ARM_JUMP24) Tj
+-54.00 -663.00 Td
+/F1 10 Tf 54.00 652.00 Td (- R_ARM_THM_CALL, R_ARM_THM_JUMP24) Tj
+-54.00 -652.00 Td
+/F1 10 Tf 54.00 641.00 Td (- R_ARM_PREL31) Tj
+-54.00 -641.00 Td
+/F1 10 Tf 54.00 630.00 Td (- R_ARM_THM_PC12 \(treated as no-op when layout preserved\)) Tj
+-54.00 -630.00 Td
+/F1 10 Tf 54.00 613.00 Td (Undefined symbols are resolved before applying relocations that reference them.) Tj
+-54.00 -613.00 Td
+ET
+endstream
+endobj
+34 0 obj
+<< /Type /Page /Parent 84 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 83 0 R >> >> /Contents 33 0 R >>
+endobj
+35 0 obj
+<< /Length 355 >>
+stream
+BT
+/F1 13 Tf 54.00 723.00 Td (6.3 Entry Point Discovery) Tj
+-54.00 -723.00 Td
+/F1 10 Tf 54.00 702.00 Td (The loader searches the symbol table for global function payload_entry \(Thumb bit in) Tj
+-54.00 -702.00 Td
+/F1 10 Tf 54.00 691.00 Td (st_value\). modloader_run\(\) casts modloader_mod.entry to int \(*\)\(void\) and calls it.) Tj
+-54.00 -691.00 Td
+ET
+endstream
+endobj
+36 0 obj
+<< /Type /Page /Parent 84 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 83 0 R >> >> /Contents 35 0 R >>
+endobj
+37 0 obj
+<< /Length 78 >>
+stream
+BT
+/F1 13 Tf 54.00 723.00 Td (7. Symbol Linking Model) Tj
+-54.00 -723.00 Td
+ET
+endstream
+endobj
+38 0 obj
+<< /Type /Page /Parent 84 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 83 0 R >> >> /Contents 37 0 R >>
+endobj
+39 0 obj
+<< /Length 994 >>
+stream
+BT
+/F1 13 Tf 54.00 723.00 Td (7.1 Payload ? Kernel \(M3\)) Tj
+-54.00 -723.00 Td
+/F1 10 Tf 54.00 696.00 Td (payload_sym.o  --R_ARM_ABS32 \(literal @ 0x10\)-->  kernel export table) Tj
+-54.00 -696.00 Td
+/F1 10 Tf 54.00 685.00 Td (\(modloader_export_add, ...\)) Tj
+-54.00 -685.00 Td
+/F1 10 Tf 54.00 662.00 Td (- Built-in exports: static table in modloader_export.c) Tj
+-54.00 -662.00 Td
+/F1 10 Tf 54.00 651.00 Td (- Dynamic exports: modloader_export_register\(\) \(up to 16 names\)) Tj
+-54.00 -651.00 Td
+/F1 10 Tf 54.00 640.00 Td (- Clang often emits undefined imports as STT_NOTYPE; resolver treats NOTYPE as callable) Tj
+-54.00 -640.00 Td
+/F1 10 Tf 54.00 629.00 Td (and sets the Thumb LSB for functions) Tj
+-54.00 -629.00 Td
+/F1 10 Tf 54.00 612.00 Td (Design rationale: A full kernel symbol table would expose too much. An explicit export) Tj
+-54.00 -612.00 Td
+/F1 10 Tf 54.00 601.00 Td (table is a security boundary: only registered functions are callable from modules.) Tj
+-54.00 -601.00 Td
+ET
+endstream
+endobj
+40 0 obj
+<< /Type /Page /Parent 84 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 83 0 R >> >> /Contents 39 0 R >>
+endobj
+41 0 obj
+<< /Length 922 >>
+stream
+BT
+/F1 13 Tf 54.00 723.00 Td (7.2 Kernel ? Payload \(M6\)) Tj
+-54.00 -723.00 Td
+/F1 10 Tf 54.00 702.00 Td (At load time, modloader_symbols_build\(\) indexes global STT_FUNC and STT_OBJECT symbols) Tj
+-54.00 -702.00 Td
+/F1 10 Tf 54.00 691.00 Td (defined in the module \(excluding linker artifacts like $t, __modloader_*\).) Tj
+-54.00 -691.00 Td
+/F1 10 Tf 54.00 674.00 Td (c) Tj
+-54.00 -674.00 Td
+/F1 10 Tf 54.00 663.00 Td (void *fn = modloader_lookup_symbol\("payload_get_magic"\);) Tj
+-54.00 -663.00 Td
+/F1 10 Tf 54.00 652.00 Td (\(\(int \(*\)\(void\)\)fn\)\(\);  // returns 55) Tj
+-54.00 -652.00 Td
+/F1 10 Tf 54.00 629.00 Td (Cleared on modloader_unload\(\).) Tj
+-54.00 -629.00 Td
+/F1 10 Tf 54.00 612.00 Td (Design rationale: Mirrors dlsym\(\). Indexing at load time avoids parsing ELF on every) Tj
+-54.00 -612.00 Td
+/F1 10 Tf 54.00 601.00 Td (lookup. ET_EXEC \(M1\) does not populate this table.) Tj
+-54.00 -601.00 Td
+ET
+endstream
+endobj
+42 0 obj
+<< /Type /Page /Parent 84 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 83 0 R >> >> /Contents 41 0 R >>
+endobj
+43 0 obj
+<< /Length 819 >>
+stream
+BT
+/F1 13 Tf 54.00 723.00 Td (7.3 Import Slot Layout Lesson \(M3\)) Tj
+-54.00 -723.00 Td
+/F1 10 Tf 54.00 702.00 Td (Placing .word modloader_export_add immediately after payload_entry without padding) Tj
+-54.00 -702.00 Td
+/F1 10 Tf 54.00 691.00 Td (collided with the linker script marker __modloader_rx_end at the end of .text. The ABS32) Tj
+-54.00 -691.00 Td
+/F1 10 Tf 54.00 680.00 Td (reloc then targeted the wrong symbol \(__modloader_rx_end address instead of the kernel) Tj
+-54.00 -680.00 Td
+/F1 10 Tf 54.00 669.00 Td (function\), causing hangs or panics.) Tj
+-54.00 -669.00 Td
+/F1 10 Tf 54.00 652.00 Td (Fix: .org 0x10 padding before the import word ? keeps the relocation tied to) Tj
+-54.00 -652.00 Td
+/F1 10 Tf 54.00 641.00 Td (modloader_export_add while __modloader_rx_end sits at 0x14.) Tj
+-54.00 -641.00 Td
+ET
+endstream
+endobj
+44 0 obj
+<< /Type /Page /Parent 84 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 83 0 R >> >> /Contents 43 0 R >>
+endobj
+45 0 obj
+<< /Length 4267 >>
+stream
+BT
+/F1 13 Tf 54.00 723.00 Td (7.4 AArch32 Thumb Interworking) Tj
+-54.00 -723.00 Td
+/F1 10 Tf 54.00 702.00 Td (Both the LK kernel \(qemu-virt-arm32, cortex-a15\) and payloads compile with -mthumb. The) Tj
+-54.00 -702.00 Td
+/F1 10 Tf 54.00 691.00 Td (PoC does not target mixed ARM/Thumb images \(-marm code calling Thumb or vice versa\).) Tj
+-54.00 -691.00 Td
+/F1 10 Tf 54.00 680.00 Td (Interworking here means preserving the Thumb LSB \(bit 0 of function addresses\) and) Tj
+-54.00 -680.00 Td
+/F1 10 Tf 54.00 669.00 Td (applying the reloc types clang emits for Thumb code.) Tj
+-54.00 -669.00 Td
+/F1 10 Tf 54.00 652.00 Td (| Mechanism | Where | Purpose |) Tj
+-54.00 -652.00 Td
+/F1 10 Tf 54.00 641.00 Td (|-----------|-------|---------|) Tj
+-54.00 -641.00 Td
+/F1 10 Tf 54.00 630.00 Td (| Thumb LSB on exports | modloader_export_vaddr\(\) | Kernel function pointers passed to) Tj
+-54.00 -630.00 Td
+/F1 10 Tf 54.00 619.00 Td (payload have bit 0 set |) Tj
+-54.00 -619.00 Td
+/F1 10 Tf 54.00 608.00 Td (| STT_NOTYPE ? function | modloader_resolve_externals\(\) | Clang ET_REL imports are often) Tj
+-54.00 -608.00 Td
+/F1 10 Tf 54.00 597.00 Td (NOTYPE; still get Thumb LSB |) Tj
+-54.00 -597.00 Td
+/F1 10 Tf 54.00 586.00 Td (| Entry discovery | modloader_find_entry\(\) | payload_entry st_value Thumb bit preserved in) Tj
+-54.00 -586.00 Td
+/F1 10 Tf 54.00 575.00 Td (modloader_mod.entry |) Tj
+-54.00 -575.00 Td
+/F1 10 Tf 54.00 564.00 Td (| Module exports \(M6\) | modloader_resolved_sym_addr\(\) | payload_get_magic etc. returned) Tj
+-54.00 -564.00 Td
+/F1 10 Tf 54.00 553.00 Td (with Thumb LSB for kernel calls |) Tj
+-54.00 -553.00 Td
+/F1 10 Tf 54.00 542.00 Td (| PC-relative relocs | modloader_apply_arm_reloc\(\) | sym_val & ~1u for offset math on) Tj
+-54.00 -542.00 Td
+/F1 10 Tf 54.00 531.00 Td (R_ARM_THM_*, R_ARM_CALL, R_ARM_PREL31 |) Tj
+-54.00 -531.00 Td
+/F1 10 Tf 54.00 520.00 Td (| Absolute pointer relocs | R_ARM_ABS32 | Full sym_val \(including LSB\) written to literal) Tj
+-54.00 -520.00 Td
+/F1 10 Tf 54.00 509.00 Td (pools |) Tj
+-54.00 -509.00 Td
+/F1 10 Tf 54.00 492.00 Td (Supported Thumb relocation types \(see modloader_reloc.c\):) Tj
+-54.00 -492.00 Td
+/F1 10 Tf 54.00 475.00 Td (| Type | Formula / notes |) Tj
+-54.00 -475.00 Td
+/F1 10 Tf 54.00 464.00 Td (|------|-----------------|) Tj
+-54.00 -464.00 Td
+/F1 10 Tf 54.00 453.00 Td (| R_ARM_THM_CALL, R_ARM_THM_JUMP24 | \(\(S + A\) \\| T\) - P; addend A decoded from insn for) Tj
+-54.00 -453.00 Td
+/F1 10 Tf 54.00 442.00 Td (SHT_REL |) Tj
+-54.00 -442.00 Td
+/F1 10 Tf 54.00 431.00 Td (| R_ARM_THM_MOVW_ABS_NC, R_ARM_THM_MOVT_ABS | Low/high 16 bits of \(S + A\) \\| T or S + A |) Tj
+-54.00 -431.00 Td
+/F1 10 Tf 54.00 420.00 Td (| R_ARM_CALL, R_ARM_JUMP24 | ARM-mode branches; BLX prefix when target is Thumb |) Tj
+-54.00 -420.00 Td
+/F1 10 Tf 54.00 409.00 Td (| R_ARM_MOVW_ABS_NC, R_ARM_MOVT_ABS | ARM-mode MOVW/MOVT pairs |) Tj
+-54.00 -409.00 Td
+/F1 10 Tf 54.00 398.00 Td (| R_ARM_ABS32, R_ARM_GLOB_DAT, R_ARM_JUMP_SLOT | \(S + A\) \\| T for function pointers |) Tj
+-54.00 -398.00 Td
+/F1 10 Tf 54.00 387.00 Td (| R_ARM_REL32, R_ARM_RELATIVE, R_ARM_PREL31 | Standard PC/base-relative |) Tj
+-54.00 -387.00 Td
+/F1 10 Tf 54.00 376.00 Td (| R_ARM_THM_PC12 | No-op when section layout is preserved |) Tj
+-54.00 -376.00 Td
+/F1 10 Tf 54.00 359.00 Td (T is the Thumb bit \(1 for STT_FUNC / resolved kernel exports\). P is the relocation place) Tj
+-54.00 -359.00 Td
+/F1 10 Tf 54.00 348.00 Td (address.) Tj
+-54.00 -348.00 Td
+/F1 10 Tf 54.00 331.00 Td (R_ARM_GLOB_DAT/R_ARM_JUMP_SLOT/R_ARM_RELATIVE/R_ARM_TARGET2 are handled by) Tj
+-54.00 -331.00 Td
+/F1 10 Tf 54.00 320.00 Td (modloader_apply_arm_reloc\(\) for completeness against the ELF for the Arm Architecture) Tj
+-54.00 -320.00 Td
+/F1 10 Tf 54.00 309.00 Td (spec, but in practice a plain compiler invocation \(clang -c\) never emits them ? a *linker*) Tj
+-54.00 -309.00 Td
+/F1 10 Tf 54.00 298.00 Td (writes these for scenarios this project's ET_REL-only scope doesn't exercise. They are) Tj
+-54.00 -298.00 Td
+/F1 10 Tf 54.00 287.00 Td (effectively dead code on this loader's actual load path; kept because removing them) Tj
+-54.00 -287.00 Td
+/F1 10 Tf 54.00 276.00 Td (narrows the relocation surface without narrowing what actually gets exercised.) Tj
+-54.00 -276.00 Td
+ET
+endstream
+endobj
+46 0 obj
+<< /Type /Page /Parent 84 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 83 0 R >> >> /Contents 45 0 R >>
+endobj
+47 0 obj
+<< /Length 1145 >>
+stream
+BT
+/F1 13 Tf 54.00 723.00 Td (C import test \(payload_import.c\)) Tj
+-54.00 -723.00 Td
+/F1 10 Tf 54.00 702.00 Td (payload_sym.S imports modloader_export_add via R_ARM_ABS32 in a literal pool \(blx r3\). A C) Tj
+-54.00 -702.00 Td
+/F1 10 Tf 54.00 691.00 Td (equivalent \(payload_import.c, -fpic -mthumb\) compiles to a direct call relocation instead:) Tj
+-54.00 -691.00 Td
+/F1 10 Tf 54.00 668.00 Td (Offset 0x04  R_ARM_THM_JUMP24  modloader_export_add) Tj
+-54.00 -668.00 Td
+/F1 10 Tf 54.00 645.00 Td (modtest loadimport / runimport loads the embedded payload_import.o and expects return) Tj
+-54.00 -645.00 Td
+/F1 10 Tf 54.00 634.00 Td (value 44 \(modloader_export_add\(20, 24\)\), exercising the THM_JUMP24 path alongside the) Tj
+-54.00 -634.00 Td
+/F1 10 Tf 54.00 623.00 Td (assembly ABS32 path.) Tj
+-54.00 -623.00 Td
+/F1 10 Tf 54.00 606.00 Td (Load VA 0x7f108000 is chosen so relocated Thumb BL/BLX targets in kernel text) Tj
+-54.00 -606.00 Td
+/F1 10 Tf 54.00 595.00 Td (\(~0x80100000\) remain within the ~16 MB range checked by R_ARM_THM_CALL / R_ARM_THM_JUMP24) Tj
+-54.00 -595.00 Td
+/F1 10 Tf 54.00 584.00 Td (handling.) Tj
+-54.00 -584.00 Td
+ET
+endstream
+endobj
+48 0 obj
+<< /Type /Page /Parent 84 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 83 0 R >> >> /Contents 47 0 R >>
+endobj
+49 0 obj
+<< /Length 317 >>
+stream
+BT
+/F1 13 Tf 54.00 723.00 Td (8. Key Design Choices) Tj
+-54.00 -723.00 Td
+/F1 10 Tf 54.00 702.00 Td (This section explains why the PoC uses ET_REL objects and virtio 9p fetch, and how that) Tj
+-54.00 -702.00 Td
+/F1 10 Tf 54.00 691.00 Td (differs from the planned virtio-blk extension \(§15\).) Tj
+-54.00 -691.00 Td
+ET
+endstream
+endobj
+50 0 obj
+<< /Type /Page /Parent 84 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 83 0 R >> >> /Contents 49 0 R >>
+endobj
+51 0 obj
+<< /Length 1805 >>
+stream
+BT
+/F1 13 Tf 54.00 723.00 Td (8.1 Why ET_REL \(relocatable .o\) instead of a fixed-address blob) Tj
+-54.00 -723.00 Td
+/F1 10 Tf 54.00 702.00 Td (| Format | Role in this project | Why chosen / not chosen |) Tj
+-54.00 -702.00 Td
+/F1 10 Tf 54.00 691.00 Td (|--------|----------------------|-------------------------|) Tj
+-54.00 -691.00 Td
+/F1 10 Tf 54.00 680.00 Td (| ET_EXEC \(M1 only\) | Prelinked blob at fixed 0x7f108000 | Chosen for M1 as the simplest) Tj
+-54.00 -680.00 Td
+/F1 10 Tf 54.00 669.00 Td (proof \(memcpy + call\). Not used for M2?M6 because real toolchains emit relocatable) Tj
+-54.00 -669.00 Td
+/F1 10 Tf 54.00 658.00 Td (objects; fixed-address blobs do not exercise relocation or imports. |) Tj
+-54.00 -658.00 Td
+/F1 10 Tf 54.00 647.00 Td (| ET_REL \(M2?M6\) | payload_reloc.o, payload_sym.o | Chosen as the main format. Compiler) Tj
+-54.00 -647.00 Td
+/F1 10 Tf 54.00 636.00 Td (output is naturally ET_REL \(clang -c, ld -r\) ? this is exactly how Linux kernel modules) Tj
+-54.00 -636.00 Td
+/F1 10 Tf 54.00 625.00 Td (\(.ko\) are built and loaded. The loader acts as a small linker: layout sections, resolve) Tj
+-54.00 -625.00 Td
+/F1 10 Tf 54.00 614.00 Td (undefined symbols, apply .rel* entries, then W^X. Export tables \(M3/M6\) provide) Tj
+-54.00 -614.00 Td
+/F1 10 Tf 54.00 603.00 Td (kernel?payload symbols without a full global symbol namespace. |) Tj
+-54.00 -603.00 Td
+/F1 10 Tf 54.00 586.00 Td (Rationale in one line: ET_REL matches how objects are built, matches how bare-metal/kernel) Tj
+-54.00 -586.00 Td
+/F1 10 Tf 54.00 575.00 Td (module loaders actually work \(Linux .ko is the closest real-world analog\), and keeps the) Tj
+-54.00 -575.00 Td
+/F1 10 Tf 54.00 564.00 Td (loader small and explicit while still supporting kernel?payload symbols \(M3/M6\).) Tj
+-54.00 -564.00 Td
+ET
+endstream
+endobj
+52 0 obj
+<< /Type /Page /Parent 84 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 83 0 R >> >> /Contents 51 0 R >>
+endobj
+53 0 obj
+<< /Length 2257 >>
+stream
+BT
+/F1 13 Tf 54.00 723.00 Td (8.2 Why virtio 9p instead of other fetch paths) Tj
+-54.00 -723.00 Td
+/F1 10 Tf 54.00 702.00 Td (| Transport | Status | Why chosen / not chosen |) Tj
+-54.00 -702.00 Td
+/F1 10 Tf 54.00 691.00 Td (|-----------|--------|-------------------------|) Tj
+-54.00 -691.00 Td
+/F1 10 Tf 54.00 680.00 Td (| virtio 9p \(M5\) | Current | QEMU virt already supports sharing a host directory as a) Tj
+-54.00 -680.00 Td
+/F1 10 Tf 54.00 669.00 Td (guest filesystem \(do-qemuarm -f\). LK overlay already includes virtio 9p + lib/fs ?) Tj
+-54.00 -669.00 Td
+/F1 10 Tf 54.00 658.00 Td (modloader_fetch\(\) is thin \(fs_open / fs_read\). Zero image build step: edit .o on host,) Tj
+-54.00 -658.00 Td
+/F1 10 Tf 54.00 647.00 Td (rerun QEMU. Ideal for PoC, CI, and fast iteration. |) Tj
+-54.00 -647.00 Td
+/F1 10 Tf 54.00 636.00 Td (| Embedded only \(M1?M3\) | Done | Proves load path without I/O. Not enough for ?load new) Tj
+-54.00 -636.00 Td
+/F1 10 Tf 54.00 625.00 Td (module without rebuilding kernel? \(M5 goal\). |) Tj
+-54.00 -625.00 Td
+/F1 10 Tf 54.00 614.00 Td (| virtio-blk \(M8\) | Planned | Better model of on-device storage \(disk image + FAT/ext2\).) Tj
+-54.00 -614.00 Td
+/F1 10 Tf 54.00 603.00 Td (Requires building/maintaining a module image and more LK pieces \(block + FS mount\). Not) Tj
+-54.00 -603.00 Td
+/F1 10 Tf 54.00 592.00 Td (chosen first because it slows the dev loop for a PoC. |) Tj
+-54.00 -592.00 Td
+/F1 10 Tf 54.00 581.00 Td (| virtio-net \(TFTP/HTTP\) | Not planned | Needs network stack \(minip etc.\), larger attack) Tj
+-54.00 -581.00 Td
+/F1 10 Tf 54.00 570.00 Td (surface and code size. OTA-style, not needed to prove fetch + reloc. |) Tj
+-54.00 -570.00 Td
+/F1 10 Tf 54.00 559.00 Td (| semihosting | Out of scope | Host file I/O via debug hooks; unrealistic for a bare-metal) Tj
+-54.00 -559.00 Td
+/F1 10 Tf 54.00 548.00 Td (product. |) Tj
+-54.00 -548.00 Td
+/F1 10 Tf 54.00 531.00 Td (Rationale in one line: 9p gives path-based file read with minimal new code and the best) Tj
+-54.00 -531.00 Td
+/F1 10 Tf 54.00 520.00 Td (edit?run workflow in QEMU; virtio-blk \(M8\) is the planned production-oriented transport) Tj
+-54.00 -520.00 Td
+/F1 10 Tf 54.00 509.00 Td (follow-up, not a replacement for 9p.) Tj
+-54.00 -509.00 Td
+ET
+endstream
+endobj
+54 0 obj
+<< /Type /Page /Parent 84 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 83 0 R >> >> /Contents 53 0 R >>
+endobj
+55 0 obj
+<< /Length 1453 >>
+stream
+BT
+/F1 13 Tf 54.00 723.00 Td (8.3 How this maps to Linux \(without copying it\)) Tj
+-54.00 -723.00 Td
+/F1 10 Tf 54.00 702.00 Td (This PoC deliberately follows insmod/request_module\(\) loading a Linux) Tj
+-54.00 -702.00 Td
+/F1 10 Tf 54.00 691.00 Td (kernel module \(.ko, itself ET_REL\) ? the closest real-world analog for a) Tj
+-54.00 -691.00 Td
+/F1 10 Tf 54.00 680.00 Td (bare-metal kernel relocating objects into memory it already owns.) Tj
+-54.00 -680.00 Td
+/F1 10 Tf 54.00 663.00 Td (| Linux | This PoC |) Tj
+-54.00 -663.00 Td
+/F1 10 Tf 54.00 652.00 Td (|-------|----------|) Tj
+-54.00 -652.00 Td
+/F1 10 Tf 54.00 641.00 Td (| insmod module.ko \(ET_REL\) | modloader_load_uri\("/v9p/payload_reloc.o"\) \(M2/M5\) |) Tj
+-54.00 -641.00 Td
+/F1 10 Tf 54.00 630.00 Td (| Kernel EXPORT_SYMBOL table | Kernel export table \(modloader_export_register, M3\) |) Tj
+-54.00 -630.00 Td
+/F1 10 Tf 54.00 619.00 Td (| A module exporting its own symbols | Module export index \(modloader_lookup_symbol, M6\) |) Tj
+-54.00 -619.00 Td
+/F1 10 Tf 54.00 608.00 Td (| LD_LIBRARY_PATH / module search path | Fixed paths \(/v9p/...\); search paths are a) Tj
+-54.00 -608.00 Td
+/F1 10 Tf 54.00 597.00 Td (possible extension \(§15\) |) Tj
+-54.00 -597.00 Td
+/F1 10 Tf 54.00 580.00 Td (The PoC intentionally trades generality for clarity and size in LK; M8 will add virtio-blk) Tj
+-54.00 -580.00 Td
+/F1 10 Tf 54.00 569.00 Td (fetch without rewriting M1?M6.) Tj
+-54.00 -569.00 Td
+ET
+endstream
+endobj
+56 0 obj
+<< /Type /Page /Parent 84 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 83 0 R >> >> /Contents 55 0 R >>
+endobj
+57 0 obj
+<< /Length 1106 >>
+stream
+BT
+/F1 13 Tf 54.00 723.00 Td (9. Memory Protection \(M4\)) Tj
+-54.00 -723.00 Td
+/F1 10 Tf 54.00 702.00 Td (After relocation, modloader_apply_wx_sections\(\) remaps each page:) Tj
+-54.00 -702.00 Td
+/F1 10 Tf 54.00 685.00 Td (| Section flags | MMU permissions |) Tj
+-54.00 -685.00 Td
+/F1 10 Tf 54.00 674.00 Td (|---------------|-----------------|) Tj
+-54.00 -674.00 Td
+/F1 10 Tf 54.00 663.00 Td (| SHF_EXECINSTR | RX \(read + execute\) |) Tj
+-54.00 -663.00 Td
+/F1 10 Tf 54.00 652.00 Td (| SHF_WRITE \(no exec\) | RW |) Tj
+-54.00 -652.00 Td
+/F1 10 Tf 54.00 641.00 Td (| Read-only alloc | RO |) Tj
+-54.00 -641.00 Td
+/F1 10 Tf 54.00 624.00 Td (modloader_wx_verify\(\) walks every page in the mapping and rejects any page that is) Tj
+-54.00 -624.00 Td
+/F1 10 Tf 54.00 613.00 Td (simultaneously writable and executable.) Tj
+-54.00 -613.00 Td
+/F1 10 Tf 54.00 596.00 Td (Design rationale: Relocation requires writable memory; execution requires RX. Splitting) Tj
+-54.00 -596.00 Td
+/F1 10 Tf 54.00 585.00 Td (permissions after reloc completes is standard for JIT loaders and dynamic linkers.) Tj
+-54.00 -585.00 Td
+ET
+endstream
+endobj
+58 0 obj
+<< /Type /Page /Parent 84 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 83 0 R >> >> /Contents 57 0 R >>
+endobj
+59 0 obj
+<< /Length 700 >>
+stream
+BT
+/F1 13 Tf 54.00 723.00 Td (10. Runtime Fetch \(M5\)) Tj
+-54.00 -723.00 Td
+/F1 10 Tf 54.00 696.00 Td (QEMU -fsdev local,path=<host_dir> -> virtio 9p -> LK mounts /v9p) Tj
+-54.00 -696.00 Td
+/F1 10 Tf 54.00 685.00 Td (modloader_fetch\("/v9p/payload_reloc.o"\) -> modloader_load_rel_image\(\)) Tj
+-54.00 -685.00 Td
+/F1 10 Tf 54.00 662.00 Td (- Mount point: /v9p, block device v9p0) Tj
+-54.00 -662.00 Td
+/F1 10 Tf 54.00 651.00 Td (- Max fetch size: 256 KB) Tj
+-54.00 -651.00 Td
+/F1 10 Tf 54.00 640.00 Td (- Reuses full ET_REL pipeline ? no separate ?file loader?) Tj
+-54.00 -640.00 Td
+/F1 10 Tf 54.00 623.00 Td (See §8.2 for why 9p was chosen over virtio-blk and network fetch.) Tj
+-54.00 -623.00 Td
+ET
+endstream
+endobj
+60 0 obj
+<< /Type /Page /Parent 84 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 83 0 R >> >> /Contents 59 0 R >>
+endobj
+61 0 obj
+<< /Length 1472 >>
+stream
+BT
+/F1 13 Tf 54.00 723.00 Td (11. Milestone Phases) Tj
+-54.00 -723.00 Td
+/F1 10 Tf 54.00 702.00 Td (| Phase | Capability | Test | Return | Rationale |) Tj
+-54.00 -702.00 Td
+/F1 10 Tf 54.00 691.00 Td (|-------|------------|------|--------|-----------|) Tj
+-54.00 -691.00 Td
+/F1 10 Tf 54.00 680.00 Td (| M1 | ET_EXEC blob load | modtest load/run | 42 | Simplest proof: memcpy + call entry |) Tj
+-54.00 -680.00 Td
+/F1 10 Tf 54.00 669.00 Td (| M2 | ET_REL relocation | modtest loadrel/runrel | 43 | Real compiler output; position-) Tj
+-54.00 -669.00 Td
+/F1 10 Tf 54.00 658.00 Td (independent |) Tj
+-54.00 -658.00 Td
+/F1 10 Tf 54.00 647.00 Td (| M3 | Payload imports kernel | modtest loadsym/runsym | 44 | Plugin needs kernel services) Tj
+-54.00 -647.00 Td
+/F1 10 Tf 54.00 636.00 Td (|) Tj
+-54.00 -636.00 Td
+/F1 10 Tf 54.00 625.00 Td (| M4 | W^X enforcement | modtest wxcheck | ? | Security baseline |) Tj
+-54.00 -625.00 Td
+/F1 10 Tf 54.00 614.00 Td (| M5 | 9p runtime fetch | modtest loadfilerel/loadfilesym | 43/44 | Fast dev iteration) Tj
+-54.00 -614.00 Td
+/F1 10 Tf 54.00 603.00 Td (without kernel rebuild |) Tj
+-54.00 -603.00 Td
+/F1 10 Tf 54.00 592.00 Td (| M6 | Kernel imports payload | modtest callsym payload_get_magic | 55 | Callbacks, plugin) Tj
+-54.00 -592.00 Td
+/F1 10 Tf 54.00 581.00 Td (APIs, bidirectional linking |) Tj
+-54.00 -581.00 Td
+/F1 10 Tf 54.00 564.00 Td (M4 is cross-cutting: every load path calls W^X before returning success.) Tj
+-54.00 -564.00 Td
+ET
+endstream
+endobj
+62 0 obj
+<< /Type /Page /Parent 84 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 83 0 R >> >> /Contents 61 0 R >>
+endobj
+63 0 obj
+<< /Length 507 >>
+stream
+BT
+/F1 13 Tf 54.00 723.00 Td (11.1 Milestone Dependencies) Tj
+-54.00 -723.00 Td
+/F1 10 Tf 54.00 696.00 Td (M1 \(ET_EXEC\)) Tj
+-54.00 -696.00 Td
+/F1 10 Tf 54.00 685.00 Td (-> M2 \(ET_REL\) -> M3 \(kernel exports\) -> M6 \(payload exports\)) Tj
+-54.00 -685.00 Td
+/F1 10 Tf 54.00 674.00 Td (|                |) Tj
+-54.00 -674.00 Td
+/F1 10 Tf 54.00 663.00 Td (+----------------+-> M5 \(9p fetch\)) Tj
+-54.00 -663.00 Td
+/F1 10 Tf 54.00 652.00 Td (M4 \(W^X\) wraps all load paths after M1) Tj
+-54.00 -652.00 Td
+ET
+endstream
+endobj
+64 0 obj
+<< /Type /Page /Parent 84 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 83 0 R >> >> /Contents 63 0 R >>
+endobj
+65 0 obj
+<< /Length 1093 >>
+stream
+BT
+/F1 13 Tf 54.00 723.00 Td (12. Payload Build System) Tj
+-54.00 -723.00 Td
+/F1 10 Tf 54.00 702.00 Td (Payloads are built with ATfE \(clang + lld\), same toolchain family as the kernel:) Tj
+-54.00 -702.00 Td
+/F1 10 Tf 54.00 685.00 Td (| Artifact | Link mode | Purpose |) Tj
+-54.00 -685.00 Td
+/F1 10 Tf 54.00 674.00 Td (|----------|-----------|---------|) Tj
+-54.00 -674.00 Td
+/F1 10 Tf 54.00 663.00 Td (| payload.elf / payload.bin | ET_EXEC @ 0x7f108000 | M1 embed |) Tj
+-54.00 -663.00 Td
+/F1 10 Tf 54.00 652.00 Td (| payload_reloc.o | ET_REL \(-r\) | M2 embed / M5 file |) Tj
+-54.00 -652.00 Td
+/F1 10 Tf 54.00 641.00 Td (| payload_sym.o | ET_REL with undefined import | M3/M5/M6 |) Tj
+-54.00 -641.00 Td
+/F1 10 Tf 54.00 630.00 Td (| payload_import.o | ET_REL C import \(R_ARM_THM_JUMP24\) | M3 embed |) Tj
+-54.00 -630.00 Td
+/F1 10 Tf 54.00 613.00 Td (llvm-objcopy embeds binaries into modloader_payload* rodata sections in the kernel ELF.) Tj
+-54.00 -613.00 Td
+/F1 10 Tf 54.00 596.00 Td (payload_meta.h \(generated\) records M1 entry VA and RX size from llvm-readelf.) Tj
+-54.00 -596.00 Td
+ET
+endstream
+endobj
+66 0 obj
+<< /Type /Page /Parent 84 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 83 0 R >> >> /Contents 65 0 R >>
+endobj
+67 0 obj
+<< /Length 71 >>
+stream
+BT
+/F1 13 Tf 54.00 723.00 Td (13. Testing & CI) Tj
+-54.00 -723.00 Td
+ET
+endstream
+endobj
+68 0 obj
+<< /Type /Page /Parent 84 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 83 0 R >> >> /Contents 67 0 R >>
+endobj
+69 0 obj
+<< /Length 545 >>
+stream
+BT
+/F1 13 Tf 54.00 723.00 Td (13.1 Autorun Script) Tj
+-54.00 -723.00 Td
+/F1 10 Tf 54.00 702.00 Td (run_modtest_all.sh runs two QEMU passes: \(1\) embedded M1?M6, \(2\) 9p fetch of the same) Tj
+-54.00 -702.00 Td
+/F1 10 Tf 54.00 691.00 Td (ET_REL payloads \(M5\). Each pass chains modtest subcommands via lk.autorun=, then poweroff.) Tj
+-54.00 -691.00 Td
+/F1 10 Tf 54.00 680.00 Td (Output is filtered with grep --line-buffered to avoid pipe deadlock with verbose boot) Tj
+-54.00 -680.00 Td
+/F1 10 Tf 54.00 669.00 Td (logs.) Tj
+-54.00 -669.00 Td
+ET
+endstream
+endobj
+70 0 obj
+<< /Type /Page /Parent 84 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 83 0 R >> >> /Contents 69 0 R >>
+endobj
+71 0 obj
+<< /Length 299 >>
+stream
+BT
+/F1 13 Tf 54.00 723.00 Td (13.2 GitHub Actions) Tj
+-54.00 -723.00 Td
+/F1 10 Tf 54.00 702.00 Td (.github/workflows/test.yml: checkout ? ./setup.sh ? make modloader ? run_modtest_all.sh on) Tj
+-54.00 -702.00 Td
+/F1 10 Tf 54.00 691.00 Td (ubuntu-latest with qemu-system-arm.) Tj
+-54.00 -691.00 Td
+ET
+endstream
+endobj
+72 0 obj
+<< /Type /Page /Parent 84 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 83 0 R >> >> /Contents 71 0 R >>
+endobj
+73 0 obj
+<< /Length 786 >>
+stream
+BT
+/F1 13 Tf 54.00 723.00 Td (14. Toolchain & Reproducibility) Tj
+-54.00 -723.00 Td
+/F1 10 Tf 54.00 702.00 Td (| Pin | File | Purpose |) Tj
+-54.00 -702.00 Td
+/F1 10 Tf 54.00 691.00 Td (|-----|------|---------|) Tj
+-54.00 -691.00 Td
+/F1 10 Tf 54.00 680.00 Td (| LK commit | LK_PIN | Stable upstream base |) Tj
+-54.00 -680.00 Td
+/F1 10 Tf 54.00 669.00 Td (| ATfE version | ATFE_VERSION | Payload + kernel clang/lld |) Tj
+-54.00 -669.00 Td
+/F1 10 Tf 54.00 658.00 Td (| local.mk | Generated by setup.sh | CLANG_BINDIR for ATfE |) Tj
+-54.00 -658.00 Td
+/F1 10 Tf 54.00 641.00 Td (Design rationale: Pinning avoids ?works on my machine? drift. ATfE is downloaded from) Tj
+-54.00 -641.00 Td
+/F1 10 Tf 54.00 630.00 Td (arm/arm-toolchain releases with SHA256 verification.) Tj
+-54.00 -630.00 Td
+ET
+endstream
+endobj
+74 0 obj
+<< /Type /Page /Parent 84 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 83 0 R >> >> /Contents 73 0 R >>
+endobj
+75 0 obj
+<< /Length 73 >>
+stream
+BT
+/F1 13 Tf 54.00 723.00 Td (15. Roadmap / TODO) Tj
+-54.00 -723.00 Td
+ET
+endstream
+endobj
+76 0 obj
+<< /Type /Page /Parent 84 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 83 0 R >> >> /Contents 75 0 R >>
+endobj
+77 0 obj
+<< /Length 558 >>
+stream
+BT
+/F1 13 Tf 54.00 723.00 Td (Planned) Tj
+-54.00 -723.00 Td
+/F1 10 Tf 54.00 702.00 Td (| ID | Item | Summary |) Tj
+-54.00 -702.00 Td
+/F1 10 Tf 54.00 691.00 Td (|----|------|---------|) Tj
+-54.00 -691.00 Td
+/F1 10 Tf 54.00 680.00 Td (| M8 | virtio-blk fetch | Alternate runtime transport: QEMU virtio disk + guest FS \(e.g.) Tj
+-54.00 -680.00 Td
+/F1 10 Tf 54.00 669.00 Td (FAT\) under /modules/, reusing existing load paths after read. Closer to on-device storage) Tj
+-54.00 -669.00 Td
+/F1 10 Tf 54.00 658.00 Td (than 9p host share. |) Tj
+-54.00 -658.00 Td
+ET
+endstream
+endobj
+78 0 obj
+<< /Type /Page /Parent 84 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 83 0 R >> >> /Contents 77 0 R >>
+endobj
+79 0 obj
+<< /Length 1052 >>
+stream
+BT
+/F1 13 Tf 54.00 723.00 Td (Other extensions) Tj
+-54.00 -723.00 Td
+/F1 10 Tf 54.00 702.00 Td (| Area | Possible extension |) Tj
+-54.00 -702.00 Td
+/F1 10 Tf 54.00 691.00 Td (|------|-------------------|) Tj
+-54.00 -691.00 Td
+/F1 10 Tf 54.00 680.00 Td (| Multiple modules | Only one ET_REL module may be resident today; a slot table +) Tj
+-54.00 -680.00 Td
+/F1 10 Tf 54.00 669.00 Td (refcounting would allow several |) Tj
+-54.00 -669.00 Td
+/F1 10 Tf 54.00 658.00 Td (| Module search paths | modloader_open\("name"\) tries /v9p, /modules, etc. |) Tj
+-54.00 -658.00 Td
+/F1 10 Tf 54.00 647.00 Td (| Typed symbol lookup | Signature-checked or versioned exports, beyond plain dlsym-style) Tj
+-54.00 -647.00 Td
+/F1 10 Tf 54.00 636.00 Td (void * |) Tj
+-54.00 -636.00 Td
+/F1 10 Tf 54.00 625.00 Td (| ELF hash / bloom | Faster symbol lookup |) Tj
+-54.00 -625.00 Td
+/F1 10 Tf 54.00 614.00 Td (| Module signing | Authenticated load |) Tj
+-54.00 -614.00 Td
+/F1 10 Tf 54.00 603.00 Td (| ET_EXEC symbol index | Exports from prelinked blobs |) Tj
+-54.00 -603.00 Td
+ET
+endstream
+endobj
+80 0 obj
+<< /Type /Page /Parent 84 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 83 0 R >> >> /Contents 79 0 R >>
+endobj
+81 0 obj
+<< /Length 569 >>
+stream
+BT
+/F1 13 Tf 54.00 723.00 Td (16. References) Tj
+-54.00 -723.00 Td
+/F1 10 Tf 54.00 702.00 Td (- Little Kernel: https://github.com/littlekernel/lk) Tj
+-54.00 -702.00 Td
+/F1 10 Tf 54.00 691.00 Td (- Arm ELF relocation: ELF for the Arm Architecture \(ABI document\)) Tj
+-54.00 -691.00 Td
+/F1 10 Tf 54.00 680.00 Td (- QEMU virt machine: https://www.qemu.org/docs/master/system/arm/virt.html) Tj
+-54.00 -680.00 Td
+/F1 10 Tf 54.00 669.00 Td (- Project README: app/modloader/README.md) Tj
+-54.00 -669.00 Td
+/F1 10 Tf 54.00 640.00 Td (*End of document*) Tj
+-54.00 -640.00 Td
+ET
+endstream
+endobj
+82 0 obj
+<< /Type /Page /Parent 84 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 83 0 R >> >> /Contents 81 0 R >>
+endobj
+83 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+84 0 obj
+<< /Type /Pages /Kids [2 0 R 4 0 R 6 0 R 8 0 R 10 0 R 12 0 R 14 0 R 16 0 R 18 0 R 20 0 R 22 0 R 24 0 R 26 0 R 28 0 R 30 0 R 32 0 R 34 0 R 36 0 R 38 0 R 40 0 R 42 0 R 44 0 R 46 0 R 48 0 R 50 0 R 52 0 R 54 0 R 56 0 R 58 0 R 60 0 R 62 0 R 64 0 R 66 0 R 68 0 R 70 0 R 72 0 R 74 0 R 76 0 R 78 0 R 80 0 R 82 0 R] /Count 41 >>
+endobj
+85 0 obj
+<< /Type /Catalog /Pages 84 0 R >>
+endobj
+xref
+0 86
+0000000000 65535 f 
+0000000009 00000 n 
+0000000627 00000 n 
+0000000755 00000 n 
+0000003204 00000 n 
+0000003332 00000 n 
+0000003465 00000 n 
+0000003593 00000 n 
+0000004210 00000 n 
+0000004338 00000 n 
+0000005851 00000 n 
+0000005980 00000 n 
+0000006779 00000 n 
+0000006909 00000 n 
+0000008361 00000 n 
+0000008491 00000 n 
+0000009097 00000 n 
+0000009227 00000 n 
+0000009913 00000 n 
+0000010043 00000 n 
+0000011378 00000 n 
+0000011508 00000 n 
+0000011638 00000 n 
+0000011768 00000 n 
+0000013449 00000 n 
+0000013579 00000 n 
+0000014593 00000 n 
+0000014723 00000 n 
+0000016380 00000 n 
+0000016510 00000 n 
+0000017082 00000 n 
+0000017212 00000 n 
+0000017726 00000 n 
+0000017856 00000 n 
+0000018692 00000 n 
+0000018822 00000 n 
+0000019229 00000 n 
+0000019359 00000 n 
+0000019488 00000 n 
+0000019618 00000 n 
+0000020664 00000 n 
+0000020794 00000 n 
+0000021768 00000 n 
+0000021898 00000 n 
+0000022769 00000 n 
+0000022899 00000 n 
+0000027219 00000 n 
+0000027349 00000 n 
+0000028547 00000 n 
+0000028677 00000 n 
+0000029046 00000 n 
+0000029176 00000 n 
+0000031034 00000 n 
+0000031164 00000 n 
+0000033474 00000 n 
+0000033604 00000 n 
+0000035110 00000 n 
+0000035240 00000 n 
+0000036399 00000 n 
+0000036529 00000 n 
+0000037281 00000 n 
+0000037411 00000 n 
+0000038936 00000 n 
+0000039066 00000 n 
+0000039625 00000 n 
+0000039755 00000 n 
+0000040901 00000 n 
+0000041031 00000 n 
+0000041153 00000 n 
+0000041283 00000 n 
+0000041880 00000 n 
+0000042010 00000 n 
+0000042361 00000 n 
+0000042491 00000 n 
+0000043329 00000 n 
+0000043459 00000 n 
+0000043583 00000 n 
+0000043713 00000 n 
+0000044323 00000 n 
+0000044453 00000 n 
+0000045558 00000 n 
+0000045688 00000 n 
+0000046309 00000 n 
+0000046439 00000 n 
+0000046510 00000 n 
+0000046846 00000 n 
+trailer
+<< /Size 86 /Root 85 0 R >>
+startxref
+46897
+%%EOF
